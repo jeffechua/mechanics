@@ -63,7 +63,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Assets\ContactShower.cs" />
+    <Compile Include="Assets\Beam.cs" />
     <Reference Include="Unity.Timeline.Editor">
       <HintPath>/Users/jefferson/Dropbox/Mechanics/Library/ScriptAssemblies/Unity.Timeline.Editor.dll</HintPath>
     </Reference>

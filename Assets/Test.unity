@@ -152,10 +152,10 @@ Rigidbody2D:
   m_Simulated: 1
   m_UseFullKinematicContacts: 0
   m_UseAutoMass: 0
-  m_Mass: 5
+  m_Mass: 1
   m_LinearDrag: 0
   m_AngularDrag: 0
-  m_GravityScale: 0
+  m_GravityScale: 1
   m_Material: {fileID: 0}
   m_Interpolate: 0
   m_SleepingMode: 1
@@ -267,7 +267,6 @@ MonoBehaviour:
   lineTemplate: {fileID: 8547391887176734529, guid: d8b8fa27a28d54339a063be29f905a7a,
     type: 3}
   samples: 200
-  forces: []
   shear: []
   moment: []
 --- !u!1 &732267685
@@ -288,7 +287,7 @@ GameObject:
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 1
+  m_IsActive: 0
 --- !u!50 &732267686
 Rigidbody2D:
   serializedVersion: 4

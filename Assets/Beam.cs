@@ -26,6 +26,20 @@ public class PointForce : Force {
 	public float GetMomentAt(float point) => point > this.point ? -force * (point - this.point) : 0;
 }
 
+public class PointMoment : Force {
+	public float point;
+	public float moment;
+	public PointMoment(float point, float moment) {
+		this.point = point;
+		this.moment = moment;
+	}
+	public float GetLowerEdge() => point;
+	public float GetUpperEdge() => point;
+	public float GetPressureAt(float point, float resolution) => 0;
+	public float GetShearAt(float point) =>  0;
+	public float GetMomentAt(float point) => point > this.point ? moment : 0;
+}
+
 [Serializable]
 public class PolynomialForce : Force {
 	public float ledge; // ∈ [0,L] in m
@@ -70,6 +84,30 @@ public class PolynomialForce : Force {
 	}
 }
 
+public class PolynomialMoment : Force {
+	public float ledge; // ∈ [0,L] in m
+	public float uedge; // ∈ [0,L] in m
+	public float[] coefficients; // coefficients to polynomial that evaluates moment (in Nm) at a point (in m)
+	public PolynomialMoment(float ledge, float uedge, params float[] coefficients) {
+		this.ledge = ledge;
+		this.uedge = uedge;
+		this.coefficients = coefficients;
+	}
+	public float GetLowerEdge() => ledge;
+	public float GetUpperEdge() => uedge;
+	public float GetPressureAt(float point, float resolution) => 0;
+	public float GetShearAt(float point) => 0;
+	public float GetMomentAt(float point) {
+		if (point < ledge)
+			return 0;
+		float sum = 0;
+		float x = point - ledge;
+		for (int i = 0; i < coefficients.Length; i++)
+			sum += coefficients[i] * Mathf.Pow(x, i);
+		return sum;
+	}
+}
+
 public class Beam : MonoBehaviour {
 
 	Vector2 origin;
@@ -89,7 +127,6 @@ public class Beam : MonoBehaviour {
 	public float[] shear;
 	public float[] moment;
 	public List<Force> forces = new List<Force>();
-	public PolynomialForce inspected;
 
 	// Start is called before the first frame update
 	void Start() {
@@ -118,7 +155,9 @@ public class Beam : MonoBehaviour {
 
 	// Update is called once per frame
 	void FixedUpdate() {
+
 		forces.Clear();
+		particles.Clear();
 
 		origin = transform.position - transform.right * length / 2;
 
@@ -146,38 +185,45 @@ public class Beam : MonoBehaviour {
 			i++;
 		}
 		// Process "true" contact points
-		particles.Clear();
 		foreach (ContactPoint2D contact in contacts) {
+
 			ep.position = contact.point;
+			ep.startColor = Color.red;
 			ep.startSize = contact.normalImpulse;
 			particles.Emit(ep, 1);
-			int sign = Vector2.Dot(contact.point - origin, transform.up) < 0 ? 1 : -1; // collision from below pushes up
-			forces.Add(new PointForce(To1D(contact.point), sign * contact.normalImpulse / Time.fixedDeltaTime));
+
+			ep.startColor = contact.tangentImpulse > 0 ? Color.blue : Color.green;
+			ep.startSize = Mathf.Abs(contact.tangentImpulse);
+			particles.Emit(ep, 1);
+
+			forces.Add(new PointForce(To1D(contact.point), GetPerpendicularForce(contact)));
+			forces.Add(new PointMoment(To1D(contact.point), GetParallelForce(contact) * transform.localScale.y / 2));
 		}
 		// Process detected contact edges
 		foreach (Tuple<ContactPoint2D, ContactPoint2D> edge in edges) {
 			float ledge, uedge, lforce, uforce;
 			float edge1 = To1D(edge.Item1.point);
 			float edge2 = To1D(edge.Item2.point);
-			float multiplier = Vector2.Dot(edge.Item1.point - origin, transform.up) < 0 ? 1 : -1;
-			multiplier /= Time.fixedDeltaTime;
 			if (edge1 < edge2) {
 				ledge = edge1;
 				uedge = edge2;
-				lforce = multiplier * edge.Item1.normalImpulse;
-				uforce = multiplier * edge.Item2.normalImpulse;
+				lforce = GetPerpendicularForce(edge.Item1);
+				uforce = GetPerpendicularForce(edge.Item2);
 			} else {
 				ledge = edge2;
 				uedge = edge1;
-				lforce = multiplier * edge.Item2.normalImpulse;
-				uforce = multiplier * edge.Item1.normalImpulse;
+				lforce = GetPerpendicularForce(edge.Item2);
+				uforce = GetPerpendicularForce(edge.Item1);
 			}
 			// Assume weight is distributed linearly, i.e. 1st order PolynomialForce
 			float upressure = uforce / (uedge - ledge) * 2;
 			float lpressure = lforce / (uedge - ledge) * 2;
 			float gradient = (upressure - lpressure) / (uedge - ledge);
 			forces.Add(new PolynomialForce(ledge, uedge, lpressure, gradient));
-			inspected = (PolynomialForce)forces[forces.Count - 1];
+			// Model tangential force as uniform (not linear)
+			float netMoment = GetParallelForce(edge.Item1) + GetParallelForce(edge.Item2);
+			float mgradient = netMoment / (uedge - ledge);
+			forces.Add(new PolynomialMoment(ledge, uedge, 0, mgradient * transform.localScale.y / 2));
 		}
 
 		pressure = new float[samples];
@@ -198,6 +244,12 @@ public class Beam : MonoBehaviour {
 
 	}
 
+	float GetPerpendicularForce (ContactPoint2D contact) {
+		return contact.normalImpulse / Time.fixedDeltaTime * Mathf.Sign(Vector2.Dot(contact.normal, transform.up));
+	}
+	float GetParallelForce(ContactPoint2D contact) {
+		return contact.tangentImpulse / Time.fixedDeltaTime;
+	}
 	float To1D(Vector2 point) => Vector2.Dot(point - origin, transform.right);
 	Vector2 ToWorldSpace(float point) => origin + (Vector2)transform.right * point;
 }
